@@ -780,8 +780,12 @@ for each row
 begin
     -- Atualiza o estoque do produto na tabela 'produtos'
     update produto
-    set quantidade = quantidade - new.quantidade
-    where id_produto = new.Produto_idproduto;
+		set quantidade = quantidade - new.quantidade
+			where idProduto = new.Produto_idProduto;
+	update venda
+		set valorTotal = valorTotal + (new.valorDeVenda + nwe.quantidade) - new.descontoProd
+			where idVenda = new.Venda_idVenda;
+    
 end $$;
     
 delimiter ;
