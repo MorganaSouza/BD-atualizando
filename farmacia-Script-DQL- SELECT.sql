@@ -379,86 +379,409 @@ select coalesce(endC.cidade, "Não informado") "Cidade",
 			group by endC.cidade, endC.bairro
 				order by sum(vnd.valorTotal - coalesce(vnd.desconto, 0)) desc;
 
-select prod.nome "Produto", 
-	count(ivndProd.Venda_idVenda) "Frequência em Vendas"
-	from  itensvendaprod ivndprod
-		inner join produto prod on prod.idProduto = ivndprod.produto_idProduto
-			group by  ivndProd.Produto_idProduto
+select prod.nome "Produto", count(ivndProd.Venda_idVenda) "Frequência em Vendas" 
+	from itensvendaprod ivndProd
+		inner join produto prod on prod.idProduto = ivndProd.Produto_idProduto
+			group by ivndProd.Produto_idProduto
 				order by count(ivndProd.Venda_idVenda) desc
-                limit 10;
-            
+					limit 10;
 
-select prod.nome "Produto", 
-	sum(ivndProd.quantidade) "Quantidade Vendida",
-    concat("R$ ", format(sum(ivndProd.quantidade*ivndProd.valorDeVenda), 2, 'de_DE')) "Faturamento do Produto",
-	count(ivndProd.Venda_idVenda) "Frequência em Vendas"
-	from  itensvendaprod ivndprod
-		inner join produto prod on prod.idProduto = ivndprod.produto_idProduto
-			group by  ivndProd.Produto_idProduto
+select prod.nome "Produto", count(ivndProd.Venda_idVenda) "Frequência em Vendas",
+	sum(ivndProd.quantidade) "Quantidade Vendida", 
+    concat("R$ ", format(sum(ivndProd.quantidade*ivndProd.valorDeVenda), 2, 'de_DE')) "Faturamento por Produto"
+	from itensvendaprod ivndProd
+		inner join produto prod on prod.idProduto = ivndProd.Produto_idProduto
+			group by ivndProd.Produto_idProduto
+				order by sum(ivndProd.quantidade) desc
+					limit 10;
+
+select prod.nome "Produto", count(ivndProd.Venda_idVenda) "Frequência em Vendas",
+	sum(ivndProd.quantidade) "Quantidade Vendida", 
+    concat("R$ ", format(sum(ivndProd.quantidade*ivndProd.valorDeVenda), 2, 'de_DE')) "Faturamento por Produto"
+	from itensvendaprod ivndProd
+		inner join produto prod on prod.idProduto = ivndProd.Produto_idProduto
+			group by ivndProd.Produto_idProduto
 				order by sum(ivndProd.quantidade*ivndProd.valorDeVenda) desc
-                limit 10;
-
-
-select tipo "Tipo", 
-	count(Venda_idVenda) "Participação em Vendas",
-	concat("R$ ", format(sum(valorPago), 2, 'de_DE')) "Valor Pago"
+					limit 10;
+ 
+select tipo "Tipo", count(Venda_idVenda) "Participação em Vendas",
+	concat("R$ ", format(sum(valorPago), 2, 'de_DE')) "Total R$"
 	from formapag
 		group by tipo
 			order by sum(valorPago) desc;
-            
 
-select servico.nome "Serviço", 
-	sum(ivndSrv.quantidade) "Quantidade Vendida",
-    concat("R$ ", format(sum(ivndSrv.quantidade*ivndSrv.valorVenda), 2, 'de_DE')) "Faturamento do Produto",
-	count(ivndSrv.Venda_idVenda) "Frequência em Vendas"
-	from  itensvendaservico ivndSrv
-		inner join servico on srv.idServico = ivndSrv.servico_idServico
-			group by  ivndSrv.Servico_idServico
+select srv.nome "Serviço", count(ivndSrv.Venda_idVenda) "Frequência em Vendas",
+	sum(ivndSrv.quantidade) "Quantidade Vendida", 
+    concat("R$ ", format(sum(ivndSrv.quantidade*ivndSrv.valorVenda), 2, 'de_DE')) "Faturamento por Produto"
+	from itensvendaservico ivndSrv
+		inner join servico srv on srv.idServico = ivndSrv.Servico_idServico
+			group by ivndSrv.Servico_idServico
 				order by sum(ivndSrv.quantidade*ivndSrv.valorVenda) desc
-                limit 10;
-                
-                
+					limit 10;
+
 -- cpf, funcionario, salario(SB), comissao, aux alimentacao(550), aux saude(idade),
--- aux escola(180filho<=6), INSS, IRRF, salario liquido
-
-
+-- aux escola(180*filho<=6), INSS, IRRF, salario liquido
 select func.cpf "CPF", upper(func.nome) "Funcionário",
 	concat("R$ ", format(func.salario, 2, 'de_DE')) "Salário Bruto",
-	concat("R$ ", format(func.comissao, 2, 'de_DE')) "Comissão",
-	concat("R$ ", format(550, 2, 'de_DE')) "Auxílio Alimentação",
-	calcAuxSaude(func.dataNasc) "Auxílio Saúde"
-			from funcionario func
-				order by func.nome;
-                
-			
--- -----------------------------------------------------
--- Criando função Auxílio Saúde
--- -----------------------------------------------------
+    concat("R$ ", format(func.comissao, 2, 'de_DE')) "Comissão",
+    concat("R$ ", format(550, 2, 'de_DE')) "Auxílio Alimentação",
+    calcAuxSaude(func.dataNasc) "Auxílio Saúde"
+	from funcionario func
+		order by func.nome;
 
-delimiter $$ -- SGBD Só executa a função chamada
+-- criando a função auxilio saude
+delimiter $$
 create function calcAuxSaude(dn date)
 	returns decimal(6,2) deterministic
-	begin -- armazena insert into e update -- pintar a misera
+	begin
 		declare idade int;
-        declare auxSaude decimal (6,2) default 0.0;
-        select timestampdiff(year, dn, now()) into idade;
-        if idade <= 25 then set aux
-        
+        declare auxSaude decimal(6,2) default 0.0;
+		select timestampdiff(year, dn, now()) into idade;
+        if idade <= 25 then set auxSaude = 250;
+			elseif idade>= 26 and idade <= 35 then set auxSaude = 350;
+            elseif idade>= 36 and idade <= 45 then set auxSaude = 450;
+            else set auxSaude = 550;
+		end if;
+        return auxSaude;
     end $$
-
 delimiter ;
 
+-- cpf, funcionario, salario(SB), comissao, aux alimentacao(550), aux saude(idade),
+-- aux escola(180*filho<=6), INSS, IRRF, salario liquido
+select func.cpf "CPF", upper(func.nome) "Funcionário",
+	concat("R$ ", format(func.salario, 2, 'de_DE')) "Salário Bruto",
+    concat("R$ ", format(func.comissao, 2, 'de_DE')) "Comissão",
+    concat("R$ ", format(550, 2, 'de_DE')) "Auxílio Alimentação",
+    concat("R$ ", format(calcAuxSaude(func.dataNasc), 2, 'de_DE')) "Auxílio Saúde"
+	from funcionario func
+		order by func.nome;
+
+-- Questões do petshop
+-- Relatório 1 - Lista dos empregados admitidos entre 2019-01-01 e 2022-03-31, 
+-- trazendo as colunas (Nome Empregado, CPF Empregado, Data Admissão,  Salário, 
+-- Departamento, Número de Telefone), ordenado por data de admissão decrescente;
+select upper(emp.nome) "Nome Empregado", emp.cpf "CPF Empregado", 
+	date_format(emp.dataAdm, '%H:%i - %d/%m/%Y') "Data Admissão",  
+	concat("R$ ", format(emp.salario, 2, 'de_DE'))"Salário", 
+    dep.nome "Departamento", tel.numero "Número de Telefone" 
+	from empregado emp
+		inner join departamento dep on dep.idDepartamento = emp.Departamento_idDepartamento
+		left join telefone tel on tel.empregado_cpf = emp.cpf
+			where emp.dataAdm between '2019-01-01' and '2023-03-31'
+				order by emp.dataAdm desc;
 
 
+-- Relatório 2 - Lista dos empregados que ganham menos que a média salarial dos funcionários 
+-- do Petshop, trazendo as colunas (Nome Empregado, CPF Empregado, Data Admissão,  
+-- Salário, Departamento, Número de Telefone), ordenado por nome do empregado;
+select upper(emp.nome) "Nome Empregado", emp.cpf "CPF Empregado", 
+	date_format(emp.dataAdm, '%H:%i - %d/%m/%Y') "Data Admissão",  
+	concat("R$ ", format(emp.salario, 2, 'de_DE')) "Salário", 
+    dep.nome "Departamento", tel.numero "Número de Telefone" 
+	from empregado emp
+    inner join departamento dep on dep.idDepartamento = emp.Departamento_idDepartamento
+	left join telefone tel on tel.empregado_cpf = emp.cpf
+		where salario <= (select avg(salario) from empregado)
+				order by emp.nome;
 
+-- Relatório 3 - Lista dos departamentos com a quantidade de empregados total por 
+-- cada departamento, trazendo também a média salarial dos funcionários do departamento 
+-- e a média de comissão recebida pelos empregados do departamento, com as colunas 
+-- (Departamento, Quantidade de Empregados, Média Salarial, Média da Comissão), 
+-- ordenado por nome do departamento;
+select dep.nome "Departamento", count(emp.cpf) "Quantidade de Empregados", 
+	concat("R$ ", format(avg(emp.salario), 2, 'de_DE')) "Média Salarial", 
+    concat("R$ ", format(avg(emp.comissao), 2, 'de_DE')) "Média da Comissão"
+	from departamento dep
+		left join empregado emp on emp.Departamento_idDepartamento = dep.idDepartamento
+		group by dep.idDepartamento
+			order by dep.nome;
 
+-- Relatório 4 - Lista dos empregados com a quantidade total de vendas já realiza 
+-- por cada Empregado, além da soma do valor total das vendas do empregado e a soma 
+-- de suas comissões, trazendo as colunas (Nome Empregado, CPF Empregado, Sexo, Salário, 
+-- Quantidade Vendas, Total Valor Vendido, Total Comissão das Vendas), ordenado por 
+-- quantidade total de vendas realizadas;
+select upper(emp.nome) "Nome Empregado", emp.cpf "CPF Empregado", emp.sexo "Gênero",
+	concat("R$ ", format(emp.salario, 2, 'de_DE')) "Salário", 
+    count(vnd.idVenda) "Quantidade Vendas", 
+    concat("R$ ", format(sum(vnd.valor - vnd.desconto), 2, 'de_DE')) "Total Valor Vendido", 
+    concat("R$ ", format(sum(vnd.comissao), 2, 'de_DE')) "Total Comissão das Vendas"
+	from empregado emp
+		left join venda vnd on vnd.Empregado_cpf = emp.cpf
+			group by emp.cpf
+				order by count(vnd.idVenda) desc;
 
+-- Relatório 5 - Lista dos empregados que prestaram Serviço na venda computando a 
+-- quantidade total de vendas realizadas com serviço por cada Empregado, além da soma do 
+-- valor total apurado pelos serviços prestados nas vendas por empregado e a soma de suas 
+-- comissões, trazendo as colunas (Nome Empregado, CPF Empregado, Sexo, Salário, Quantidade 
+-- Vendas com Serviço, Total Valor Vendido com Serviço, Total Comissão das Vendas com Serviço)
+-- , ordenado por quantidade total de vendas realizadas;
+select upper(emp.nome) "Nome Empregado", emp.cpf "CPF Empregado", emp.sexo "Gênero",
+	concat("R$ ", format(emp.salario, 2, 'de_DE')) "Salário", 
+    count(vnd.idVenda) "Quantidade de Vendas com Serviço", 
+    concat("R$ ", format(sum((isv.valor - isv.desconto) * isv.quantidade), 2, 'de_DE')) 
+		"Total Valor Vendido com Serviço",
+    concat("R$ ", format(sum(vnd.comissao), 2, 'de_DE')) 
+		"Total Comissão das Vendas com Serviço"
+	 from empregado emp
+		inner join itensservico isv on isv.Empregado_cpf = emp.cpf
+        inner join servico srv on srv.idServico = isv.Servico_idServico
+        inner join venda vnd on vnd.idVenda = isv.Venda_idVenda
+			group by emp.cpf
+				order by count(vnd.idVenda) desc;
 
+-- Relatório 6 - Lista dos serviços já realizados por um Pet, trazendo as colunas 
+-- (Nome do Pet, Data do Serviço, Nome do Serviço, Quantidade, Valor, 
+-- Empregado que realizou o Serviço), ordenado por data do serviço da mais recente a 
+-- mais antiga;  
+select p.nome "Nome do Pet", vnd.`data` "Data do Serviço", srv.nome "Nome do Serviço", 
+	isv.quantidade "Quantidade", 
+    concat("R$ ", format(isv.valor, 2, 'de_DE')) "Valor", 
+	emp.nome "Empregado que realizou o Serviço"
+	 from pet p 
+		inner join itensservico isv on isv.pet_idpet = p.idpet
+        inner join servico srv on srv.idServico = isv.Servico_idServico
+        inner join venda vnd on vnd.idVenda = isv.Venda_idVenda
+		inner join empregado emp on emp.cpf = isv.Empregado_cpf
+			order by vnd.`data` desc;
+  
+-- cpf, funcionario, salario(SB), comissao, aux alimentacao(550), aux saude(idade),
+-- aux escola(180*filho<6), INSS, IRRF, salario liquido
+select func.cpf "CPF", upper(func.nome) "Funcionário",
+	concat("R$ ", format(func.salario, 2, 'de_DE')) "Salário Bruto",
+    concat("R$ ", format(func.comissao, 2, 'de_DE')) "Comissão",
+    concat("R$ ", format(550, 2, 'de_DE')) "Auxílio Alimentação",
+    concat("R$ ", format(calcAuxSaude(func.dataNasc), 2, 'de_DE')) "Auxílio Saúde"
+	from funcionario func
+		order by func.nome;  
+        
+        
+delimiter $$
+create function auxEscola(pCPF varchar(14))
+returns decimal(6,2) deterministic
+	begin
+		declare auxEscola decimal(6,2) default 0.0;
+        select count(cpf)*180 into auxEscola
+			from dependente
+				where timestampdiff(year, dataNasc, now()) < 6 and
+					Funcionario_cpf like pCPF
+						group by Funcionario_cpf;
+		return auxEscola;
+    end $$
+delimiter ;   
 
+-- cpf, funcionario, salario(SB), comissao, aux alimentacao(550), aux saude(idade),
+-- aux escola(180*filho<6), INSS, IRRF, salario liquido
+select func.cpf "CPF", upper(func.nome) "Funcionário",
+	concat("R$ ", format(func.salario, 2, 'de_DE')) "Salário Bruto",
+    concat("R$ ", format(func.comissao, 2, 'de_DE')) "Comissão",
+    concat("R$ ", format(550, 2, 'de_DE')) "Auxílio Alimentação",
+    concat("R$ ", format(calcAuxSaude(func.dataNasc), 2, 'de_DE')) "Auxílio Saúde",
+    concat("R$ ", format(auxEscola(func.cpf), 2, 'de_DE')) "Auxílio Escola"
+	from funcionario func
+		order by func.nome;
+   
+delimiter $$
+create function calcINSS(sb decimal(7,2))
+returns decimal(6,2) deterministic
+	begin
+		declare inss decimal(6,2) default 0.0;
+        if sb <= 1412.00 
+			then set inss = sb * 0.075;
+		elseif sb > 1412.00 and sb <= 2666.68
+			then set inss = sb * 0.09;
+        elseif sb > 2666.68 and sb <= 4000.03
+			then set inss = sb * 0.12;
+		elseif sb > 4000.03 and sb <= 7786.02
+			then set inss = sb * 0.14;
+		else set inss = 7786.02 * 0.14;
+		end if;
+        return inss;
+    end $$
+delimiter ;           
+        
+-- cpf, funcionario, salario(SB), comissao, aux alimentacao(550), aux saude(idade),
+-- aux escola(180*filho<6), INSS, IRRF, salario liquido
+select func.cpf "CPF", upper(func.nome) "Funcionário",
+	concat("R$ ", format(func.salario, 2, 'de_DE')) "Salário Bruto",
+    concat("R$ ", format(func.comissao, 2, 'de_DE')) "Comissão",
+    concat("R$ ", format(550, 2, 'de_DE')) "Auxílio Alimentação",
+    concat("R$ ", format(calcAuxSaude(func.dataNasc), 2, 'de_DE')) "Auxílio Saúde",
+    concat("R$ ", format(auxEscola(func.cpf), 2, 'de_DE')) "Auxílio Escola",
+    concat("- R$ ", format(calcINSS(func.salario), 2, 'de_DE')) "INSS"
+	from funcionario func
+		order by func.nome;        
+        
+delimiter $$
+create function calcIRRF(sb decimal(7,2))
+returns decimal(6,2) deterministic
+	begin
+		declare irrf decimal(6,2) default 0.0;
+        if sb >= 2259.20 and sb <= 2826.65
+			then set irrf = sb * 0.075;
+        elseif sb >= 2826.66 and sb <= 3751.05
+			then set irrf = sb * 0.15;
+		elseif sb >= 3751.06 and sb <= 4664.68
+			then set irrf = sb * 0.225;
+		else set irrf = sb * 0.275;
+		end if;
+        return irrf;
+    end $$
+delimiter ;  
+  
+-- cpf, funcionario, salario(SB), comissao, aux alimentacao(550), aux saude(idade),
+-- aux escola(180*filho<6), INSS, IRRF, salario liquido
+select func.cpf "CPF", upper(func.nome) "Funcionário",
+	concat("R$ ", format(func.salario, 2, 'de_DE')) "Salário Bruto",
+    concat("R$ ", format(func.comissao, 2, 'de_DE')) "Comissão",
+    concat("R$ ", format(550, 2, 'de_DE')) "Auxílio Alimentação",
+    concat("R$ ", format(calcAuxSaude(func.dataNasc), 2, 'de_DE')) "Auxílio Saúde",
+    concat("R$ ", format(auxEscola(func.cpf), 2, 'de_DE')) "Auxílio Escola",
+    concat("- R$ ", format(calcINSS(func.salario), 2, 'de_DE')) "INSS",
+    concat("- R$ ", format(calcIRRF(func.salario), 2, 'de_DE')) "IRRF",
+    concat("R$ ", format(func.salario + func.comissao + 550 + 
+		calcAuxSaude(func.dataNasc) +  auxEscola(func.cpf) - 
+		calcINSS(func.salario) - calcIRRF(func.salario), 2, 'de_DE')) "Salário Líquido"
+	from funcionario func
+		order by func.nome;  
+        
+create view vFolhaSalarial as
+	select func.cpf "CPF", upper(func.nome) "Funcionário",
+	concat("R$ ", format(func.salario, 2, 'de_DE')) "Salário Bruto",
+    concat("R$ ", format(func.comissao, 2, 'de_DE')) "Comissão",
+    concat("R$ ", format(550, 2, 'de_DE')) "Auxílio Alimentação",
+    concat("R$ ", format(calcAuxSaude(func.dataNasc), 2, 'de_DE')) "Auxílio Saúde",
+    concat("R$ ", format(auxEscola(func.cpf), 2, 'de_DE')) "Auxílio Escola",
+    concat("- R$ ", format(calcINSS(func.salario), 2, 'de_DE')) "INSS",
+    concat("- R$ ", format(calcIRRF(func.salario), 2, 'de_DE')) "IRRF",
+    concat("R$ ", format(func.salario + func.comissao + 550 + 
+		calcAuxSaude(func.dataNasc) +  auxEscola(func.cpf) - 
+		calcINSS(func.salario) - calcIRRF(func.salario), 2, 'de_DE')) "Salário Líquido"
+	from funcionario func
+		order by func.nome;
 
+select * from vfolhasalarial;
 
+delimiter $$
+create procedure cadFuncionario(in pcpf varchar(14),
+								in pnome varchar(60), 
+								in pnomeSocial varchar(45),
+								in pemail varchar(45), 
+								in psexo char(1), 
+								in pestadoCivil varchar(15), 
+								in pdataNasc date, 
+								in pch int, 
+								in psalario decimal(7,2),
+								in pcomissao decimal(6,2), 
+								in pdataAdm datetime,
+								in puf char(2), 
+								in pcidade varchar(60), 
+								in pbairro varchar(60), 
+								in prua varchar(70), 
+								in pnumero int, 
+								in pcomp varchar(45), 
+								in pcep varchar(9),
+								in pNumTel1 varchar(15),
+								in pNumTel2 varchar(15),
+								in pNumTel3 varchar(15))
+	begin
+		insert into funcionario (cpf, nome, nomeSocial, email, sexo, estadoCivil, 
+        dataNasc, ch, salario, comissao, dataAdm)
+			value(pcpf, pnome, pnomeSocial, pemail, psexo, pestadoCivil, 
+        pdataNasc, pch, psalario, pcomissao, pdataAdm);
+        insert into enderecofunc
+			value (pcpf, puf, pcidade, pbairro, prua, pnumero, pcomp, pcep);
+		insert into telefone (numero, funcionario_cpf)
+			value (pNumTel1, pcpf);
+		if (pNumTel2 is not null) 
+			then insert into telefone (numero, funcionario_cpf) 
+					value (pNumTel2, pcpf);
+		end if;
+        if (pNumTel3 is not null) 
+			then insert into telefone (numero, funcionario_cpf) 
+					value (pNumTel3, pcpf);
+		end if;
+    end $$
+delimiter ;
 
+call cadFuncionario("323.568.951-12", "Morgana Souza", "Morg", "morg.souza@gmail.com",
+	'F', "Divorciada", '2000-03-31', 30, 3200, 0, '2024-02-05', 'PE', "Recife",
+    "Iputinga", "Rua Marechal Deodoro da Fonsceca", 56, "Casa B", "50030-070",
+    "(81)996345658", "(81)986532124", null);
 
+alter table cliente
+	add column idade int null;
+    
+alter table cliente
+	add column pontuacao int null;
 
+delimiter $$
+create procedure cadCliente(in pcpf varchar(14),
+							in pnome varchar(45),
+							in psexo char(1), 
+							in pemail varchar(45), 
+							in ptelefone varchar(15), 
+							in pdataNasc date,
+							in ppontuacao int,
+							in puf char(2), 
+							in pcidade varchar(60), 
+							in pbairro varchar(60), 
+							in prua varchar(70), 
+							in pnumero int, 
+							in pcomp varchar(45), 
+							in pcep varchar(9),
+							in pnumeroPS varchar(45),
+							in pnomePS varchar(45))
+	begin
+		select timestampdiff(year, pdataNasc, now()) into @idade;
+        insert into cliente
+			value (pcpf, pnome, psexo, pemail, ptelefone, pdataNasc, @idade, ppontuacao);
+		if(pcidade is not null) 
+			then insert into enderecocli 
+				value (pcpf, puf, pcidade, pbairro, prua, pnumero, pcomp, pcep);
+		end if;
+        if(pnumeroPS is not null)
+			then insert into planosaude
+				value(pcpf, pnumeroPS, pnomePS);
+		end if;        
+    end $$
+delimiter ;
 
-            
+call cadCliente("708.987.999-90", "Hadassa Gomes dos Santos", 'F', 
+	"doraaventureira@gmail.com", "(81)987455465", '2001-04-14', 100, "PE", "Recife",
+    "Imbiribeira", "Rua Macaco Botas", 105, "Ap 1403", "50070-070", null, null);
+
+call cadCliente("711.987.111-92", "Thayza Vitória", 'F', 
+	"thayzasilva@gmail.com", "(81)998521470", '2003-10-01', 120, "PE", "Recife",
+    "Santa Amaro", "Rua do Cemitério", 81, null, "58070-080", "32659825", "Unimed Recife");
+    
+-- ----------------------------------------
+-- TRIGGERS: Triggers são ações automáticas no banco de dados que acontecem 
+-- em resposta a eventos como inserções, 
+-- atualizações ou exclusões de registros em uma tabela.
+-- ESTRUTURA: 
+-- nome: nome do gatilho, segue as mesmas regras de nomeação dos demais objetos do banco.
+-- momento: quando o gatilho será executado. Os valores válidos são BEFORE (antes) e AFTER (depois).
+-- evento: evento que vai disparar o gatilho. Os valores possíveis são INSERT, UPDATE e DELETE. Vale salientar que os comandos LOAD DATA e REPLACE também disparam os eventos de inserção e exclusão de registros, com isso, os gatilhos também são executados.
+-- tabela: nome da tabela a qual o gatilho está associado.
+-- ----------------
+-- NEW dá acesso ao novo registro.
+-- OLD dá acesso ao registro que está sendo removido
+--
+--
+-- ------------------------------------------
+delimiter $$
+create trigger trg_aft_insert_itensvendaprod
+after insert
+on itensvendaprod
+for each row 
+begin
+    -- Atualiza o estoque do produto na tabela 'produtos'
+    update produto
+    set quantidade = quantidade - new.quantidade
+    where id_produto = new.Produto_idproduto;
+end $$;
+    
+delimiter ;
